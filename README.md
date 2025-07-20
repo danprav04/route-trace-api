@@ -32,6 +32,98 @@ The application is designed with a modular architecture that separates concerns,
 5.  **Database (`/database`)**: Uses SQLAlchemy to interact with a database (configured for MySQL). It stores user information and every route trace result for historical analysis.
 6.  **AI Parser (`/AI_parser`)**: A client that sends raw text from device commands to an external microservice, which returns structured data. This makes the tool adaptable to different OS versions and command outputs.
 
+## Workflow & Logic
+
+The power of the Route Trace API comes from its intelligent, multi-source data correlation. The diagrams below illustrate the application's flow, from a user request to the detailed logic inside the tracer engine.
+
+### High-Level API Flow
+
+This diagram shows the typical user journey when interacting with the API.
+
+```mermaid
+graph TD
+    A[User] --> B{POST /verify-device-auth};
+    B -- Credentials --> C[Network Device];
+    C -- Validation --> B;
+    B -- JWT Token --> A;
+    A --> D{GET /get-route-trace/};
+    D -- Token & IPs --> E[API Endpoint];
+    E -- Authenticates Token --> F[Tracer Engine];
+    F -- Performs Trace --> G[Database];
+    G -- Saves Trace --> F;
+    F -- Returns Route --> E;
+    E -- JSON Response --> A;
+
+    subgraph "Authentication"
+        A
+        B
+        C
+    end
+
+    subgraph "Tracing"
+        D
+        E
+        F
+        G
+    end
+```
+
+### Tracer Engine Logic
+
+This diagram details the decision-making process inside the `Tracer` class as it builds the route, hop by hop. It showcases how the engine prioritizes different data sources to build an accurate path.
+
+#### Layer 3 (WAN) Trace
+
+```mermaid
+graph TD
+    subgraph "L3 Trace: find_wan_route_dg_to_dg"
+        A(Start L3 Trace at Current Hop) --> B{MPLS Label?};
+        B -- Yes --> C[Device: sh mpls ldp/forwarding];
+        B -- No --> D{Firewall Suspected?};
+        D -- No --> E{Is it TE?};
+        E -- No --> F[Device: sh ip cef vrf...];
+        D -- Yes --> G[Device: Checkpoint Commands];
+        E -- Yes --> H[Device: sh mpls forwarding tunnels...];
+
+        C --> I{Get Next Hop IP};
+        F --> I;
+        G --> I;
+        H --> I;
+
+        I --> J{Found Next Hop IP?};
+        J -- Yes --> K[Datalake: Get Hostname/VRF];
+        K --> L[Append Hop to Route];
+        L --> M{Is Destination?};
+        M -- No --> A;
+        M -- Yes --> N(End Trace);
+        J -- No --> N;
+    end
+```
+
+#### Layer 2 (LAN) Trace
+
+```mermaid
+graph TD
+    subgraph "L2 Trace: mac_trace"
+        A(Start L2 Trace) --> B[Datalake: Get MAC, Interface, VRF from ARP];
+        B --> C{Start at Switch};
+        C --> D[Device: sh mac address-table];
+        D --> E{Find Next Hop Interface};
+        E --> F[Datalake: Is Interface Port-Channel?];
+        F -- Yes --> G[Get Physical Interface];
+        F -- No --> H[Use Current Interface];
+        G --> H;
+        H --> I[Append Hop to Route];
+        I --> J{Is Interface an Access Port?};
+        J -- Yes --> K(End Trace);
+        J -- No --> L[Device: sh cdp neighbor detail];
+        L --> M{Get Next Hop IP & ID};
+        M --> N[Datalake: Get Main IP from Interface IP];
+        N --> C;
+    end
+```
+
+
 ---
 
 ## 🔧 Setup & Installation
