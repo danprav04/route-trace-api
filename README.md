@@ -18,6 +18,14 @@ The **Route Trace API** is a powerful and intelligent network analysis tool desi
 
 ---
 
+## 🖥️ Companion Frontend
+
+This API serves as the backend for the RouteTrace UI, a modern React application that provides a rich, interactive user interface for visualizing network paths, comparing traces, and managing trace history.
+
+*   **Frontend Repository:** [https://github.com/danprav04/route-trace-ui-2](https://github.com/danprav04/route-trace-ui-2)
+
+---
+
 ## 🏛️ Architecture Overview
 
 The application is designed with a modular architecture that separates concerns, making it scalable and easy to maintain.
